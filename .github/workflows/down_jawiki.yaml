@@ -14,27 +14,27 @@ jobs:
           - {
               file: "jawiki-latest-redirect.sql.gz",
               rss: "jawiki-latest-redirect.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-redirect.sqlite.gz",
+              sqlite: "jawiki-latest-redirect.sqlite",
             }
           - {
               file: "jawiki-latest-page.sql.gz",
               rss: "jawiki-latest-page.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-page.sqlite.gz",
+              sqlite: "jawiki-latest-page.sqlite",
             }
           - {
               file: "jawiki-latest-pagelinks.sql.gz",
               rss: "jawiki-latest-pagelinks.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-pagelinks.sqlite.gz",
+              sqlite: "jawiki-latest-pagelinks.sqlite",
             }
           - {
               file: "jawiki-latest-linktarget.sql.gz",
               rss: "jawiki-latest-linktarget.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-linktarget.sqlite.gz",
+              sqlite: "jawiki-latest-linktarget.sqlite",
             }
           - {
               file: "jawiki-latest-categorylinks.sql.gz",
               rss: "jawiki-latest-categorylinks.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-categorylinks.sqlite.gz",
+              sqlite: "jawiki-latest-categorylinks.sqlite",
             }
     steps:
       - uses: actions/checkout@v4
