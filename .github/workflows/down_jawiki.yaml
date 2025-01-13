@@ -37,14 +37,10 @@ jobs:
               sqliteGzip: "jawiki-latest-categorylinks.sqlite.gz",
             }
     steps:
-      - name: Checkout this repository
-        uses: actions/checkout@v4
-
-      - name: Checkout mysql2sqlite
-        uses: actions/checkout@v4
-        with:
-          repository: "mysql2sqlite/mysql2sqlite"
-          path: "mysql2sqlite"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - run: pip install mysql-to-sqlite3
+      - run: sudo systemctl start mysql.service
 
       - name: Get previous pubDate
         uses: actions/cache@v4
@@ -73,22 +69,28 @@ jobs:
         run: |
           7z x temp.sql.gz
 
-      - name: Convert
+      - name: Import sql to mysql
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
         run: |
-          mysql2sqlite/mysql2sqlite temp.sql | sqlite3 temp.sqlite
+          mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS jawiki;"
+          mysql -u root -proot jawiki < temp.sql
+
+      - name: Export to sqlite
+        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        run: |
+          mysql2sqlite -f ${{matrix.files.sqlite}} -d jawiki -u root --mysql-password root
 
       - name: Compress
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
         run: |
-          7z a -tgzip ${{matrix.files.sqliteGzip}} temp.sqlite
+          7z a -tgzip ${{matrix.files.sqlite}}.gz ${{matrix.files.sqlite}}
 
       - name: Upload Artifact
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{matrix.files.sqliteGzip}}
-          path: ${{matrix.files.sqliteGzip}}
+          name: ${{matrix.files.sqlite}}.gz
+          path: ${{matrix.files.sqlite}}.gz
           if-no-files-found: error
 
   release:
