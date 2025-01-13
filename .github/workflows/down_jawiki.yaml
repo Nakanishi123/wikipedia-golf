@@ -83,14 +83,14 @@ jobs:
       - name: Compress
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
         run: |
-          7z a -tgzip ${{matrix.files.sqlite}}.gz ${{matrix.files.sqlite}}
+          7z a ${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
 
       - name: Upload Artifact
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{matrix.files.sqlite}}.gz
-          path: ${{matrix.files.sqlite}}.gz
+          name: ${{matrix.files.sqlite}}.7z
+          path: ${{matrix.files.sqlite}}.7z
           if-no-files-found: error
 
   release:
