@@ -1,0 +1,119 @@
+name: Download jawiki
+
+on:
+  schedule:
+    - cron: "0 10 * * 2"
+  workflow_dispatch:
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        files:
+          - {
+              file: "jawiki-latest-redirect.sql.gz",
+              rss: "jawiki-latest-redirect.sql.gz-rss.xml",
+              sqliteGzip: "jawiki-latest-redirect.sqlite.gz",
+            }
+          - {
+              file: "jawiki-latest-page.sql.gz",
+              rss: "jawiki-latest-page.sql.gz-rss.xml",
+              sqliteGzip: "jawiki-latest-page.sqlite.gz",
+            }
+          - {
+              file: "jawiki-latest-pagelinks.sql.gz",
+              rss: "jawiki-latest-pagelinks.sql.gz-rss.xml",
+              sqliteGzip: "jawiki-latest-pagelinks.sqlite.gz",
+            }
+          - {
+              file: "jawiki-latest-linktarget.sql.gz",
+              rss: "jawiki-latest-linktarget.sql.gz-rss.xml",
+              sqliteGzip: "jawiki-latest-linktarget.sqlite.gz",
+            }
+          - {
+              file: "jawiki-latest-categorylinks.sql.gz",
+              rss: "jawiki-latest-categorylinks.sql.gz-rss.xml",
+              sqliteGzip: "jawiki-latest-categorylinks.sqlite.gz",
+            }
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Checkout mysql2sqlite
+        uses: actions/checkout@v4
+        with:
+          repository: "mysql2sqlite/mysql2sqlite"
+          path: "mysql2sqlite"
+
+      - name: Get previous pubDate
+        uses: actions/cache@v4
+        with:
+          path: prevPubDate.txt
+          key: rss-${{matrix.files.file}}
+
+      - name: Date to environment variable
+        run: echo "PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo 'Thu, 01 Jan 1970 11:45:14 GMT')" >> $GITHUB_ENV
+
+      - name: Get RSS pubDate
+        run: |
+          PUB_DATE=$(
+            wget -q -O - https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.rss}} | 
+            awk -F'<pubDate>|</pubDate>' '{if ($2 != "") print $2}'
+          )
+          echo "PUB_DATE=$PUB_DATE" >> $GITHUB_ENV
+
+      - name: Download
+        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        run: |
+          wget -q -O temp.sql.gz https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.file}}
+
+      - name: Extract
+        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        run: |
+          7z x temp.sql.gz
+
+      - name: Convert
+        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        run: |
+          mysql2sqlite/mysql2sqlite temp.sql | sqlite3 temp.sqlite
+
+      - name: Compress
+        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        run: |
+          7z a -tgzip ${{matrix.files.sqliteGzip}} temp.sqlite
+
+      - name: Upload Artifact
+        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{matrix.files.sqliteGzip}}
+          path: ${{matrix.files.sqliteGzip}}
+          if-no-files-found: error
+
+  release:
+    needs: download
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Get Date
+        run: echo "DATE=$(TZ=JST-9 date '+%Y.%-m.%-d')" >> $GITHUB_ENV
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts/
+          merge-multiple: true
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.DATE }}
+          name: ${{ env.DATE }}
+          body: ${{ env.DATE }}
+          files: |
+            ./artifacts/*
