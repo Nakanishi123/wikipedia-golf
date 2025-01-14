@@ -187,7 +187,7 @@ jobs:
       - name: Make Release Body
         run: |
           echo "RELEASE_TEXT<<EOF"            >> $GITHUB_ENV
-          echo "## Wikipedia Jawiki"          >> $GITHUB_ENV
+          echo "## wikipedia jawiki"          >> $GITHUB_ENV
           echo ""                             >> $GITHUB_ENV
           echo "| File | Date | Updated |"    >> $GITHUB_ENV
           echo "| ---- | ---- | ------- |"    >> $GITHUB_ENV
