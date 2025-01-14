@@ -186,15 +186,14 @@ jobs:
 
       - name: Make Release Body
         run: |
-          echo "RELEASE_TEXT<<EOF" >> $GITHUB_ENV
-
-          echo "## Wikipedia Jawiki        " >> $GITHUB_ENV
-          echo "                           " >> $GITHUB_ENV
-          echo "| File | Date | Updated |  " >> $GITHUB_ENV
-          echo "| ---- | ---- | ------- |  " >> $GITHUB_ENV
+          echo "RELEASE_TEXT<<EOF"            >> $GITHUB_ENV
+          echo "## Wikipedia Jawiki"          >> $GITHUB_ENV
+          echo ""                             >> $GITHUB_ENV
+          echo "| File | Date | Updated |"    >> $GITHUB_ENV
+          echo "| ---- | ---- | ------- |"    >> $GITHUB_ENV
           cat ./artifacts/release_body.rtxt.* >> $GITHUB_ENV
+          echo "EOF"                          >> $GITHUB_ENV
 
-          echo "EOF" >> $GITHUB_ENV
           rm ./artifacts/release_body.rtxt.*
 
       - name: Release
