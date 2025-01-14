@@ -157,6 +157,15 @@ jobs:
           path: artifacts/*
           if-no-files-found: error
 
+      - name: Save pubDate
+        run: echo ${{env.PUB_DATE}} > prevPubDate.txt
+
+      - name: Save pubDate
+        uses: actions/cache/save@v4
+        with:
+          path: prevPubDate.txt
+          key: ${{matrix.files.file}}
+
   release:
     needs: download
     permissions:
