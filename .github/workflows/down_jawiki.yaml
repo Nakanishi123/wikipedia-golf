@@ -1,8 +1,6 @@
 name: Download jawiki
 
 on:
-  schedule:
-    - cron: "0 10 * * 2"
   workflow_dispatch:
 
 jobs:
@@ -14,31 +12,30 @@ jobs:
           - {
               file: "jawiki-latest-redirect.sql.gz",
               rss: "jawiki-latest-redirect.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-redirect.sqlite.gz",
+              sqlite: "jawiki-latest-redirect.sqlite",
             }
           - {
               file: "jawiki-latest-page.sql.gz",
               rss: "jawiki-latest-page.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-page.sqlite.gz",
+              sqlite: "jawiki-latest-page.sqlite",
             }
           - {
               file: "jawiki-latest-pagelinks.sql.gz",
               rss: "jawiki-latest-pagelinks.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-pagelinks.sqlite.gz",
+              sqlite: "jawiki-latest-pagelinks.sqlite",
             }
           - {
               file: "jawiki-latest-linktarget.sql.gz",
               rss: "jawiki-latest-linktarget.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-linktarget.sqlite.gz",
+              sqlite: "jawiki-latest-linktarget.sqlite",
             }
           - {
               file: "jawiki-latest-categorylinks.sql.gz",
               rss: "jawiki-latest-categorylinks.sql.gz-rss.xml",
-              sqliteGzip: "jawiki-latest-categorylinks.sqlite.gz",
+              sqlite: "jawiki-latest-categorylinks.sqlite",
             }
     steps:
-      - name: Checkout this repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Checkout mysql2sqlite
         uses: actions/checkout@v4
@@ -53,42 +50,94 @@ jobs:
           key: rss-${{matrix.files.file}}
 
       - name: Date to environment variable
-        run: echo "PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo 'Thu, 01 Jan 1970 11:45:14 GMT')" >> $GITHUB_ENV
+        run: echo "PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo '😊')" >> $GITHUB_ENV
 
-      - name: Get RSS pubDate
+      - name: Get RSS pubDate and set UPDATED
         run: |
           PUB_DATE=$(
             wget -q -O - https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.rss}} | 
             awk -F'<pubDate>|</pubDate>' '{if ($2 != "") print $2}'
           )
-          echo "PUB_DATE=$PUB_DATE" >> $GITHUB_ENV
+
+          PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo '😊')
+          if [ "$PREV_PUB_DATE" != "$PUB_DATE" ]; then
+            echo "UPDATED=true" >> $GITHUB_ENV
+          else
+            echo "UPDATED=" >> $GITHUB_ENV # empty if false
+          fi
 
       - name: Download
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        if: ${{env.UPDATED}}
         run: |
           wget -q -O temp.sql.gz https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.file}}
 
       - name: Extract
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        if: ${{env.UPDATED}}
         run: |
           7z x temp.sql.gz
+          rm temp.sql.gz
 
-      - name: Convert
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+      - name: Convert by mysql2sqlite.sh
+        id: mysql2sqlite-sh
+        if: ${{env.UPDATED}}
+        continue-on-error: true
         run: |
-          mysql2sqlite/mysql2sqlite temp.sql | sqlite3 temp.sqlite
+          mysql2sqlite/mysql2sqlite temp.sql | sqlite3 ${{matrix.files.sqlite}}
+
+      - uses: actions/setup-python@v5
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies for python mysql2sqlite
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        run: |
+          pip install mysql-to-sqlite3
+          sudo apt-get update
+          sudo apt-get install pv
+
+      - name: Start MySQL
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "9.0"
+          root-password: root
+          my-cnf: |
+            skip_innodb_doublewrite
+            disable_log_bin
+            innodb_log_writer_threads=OFF
+            innodb_dedicated_server=ON
+            innodb_flush_log_at_trx_commit=2
+            sync_binlog=0
+
+      - name: Import sql to mysql
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        run: |
+          mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS jawiki;"
+          pv -f temp.sql | mysql -u root -proot jawiki
+
+      - name: Export to sqlite
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        run: |
+          mysql2sqlite -f ${{matrix.files.sqlite}} -d jawiki -u root --mysql-password root
 
       - name: Compress
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        if: ${{env.UPDATED}}
         run: |
-          7z a -tgzip ${{matrix.files.sqliteGzip}} temp.sqlite
+          mkdir -p artifacts
+          filesize=$(stat --format="%s" ${{matrix.files.sqlite}})
+          if((filesize <= 2147483648)); then
+            7z a artifacts/${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
+          else
+            7z a -v1999m artifacts/${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
+          fi
 
       - name: Upload Artifact
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        if: ${{env.UPDATED}}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{matrix.files.sqliteGzip}}
-          path: ${{matrix.files.sqliteGzip}}
+          name: ${{matrix.files.sqlite}}.7z
+          path: artifacts/*
           if-no-files-found: error
 
   release:
