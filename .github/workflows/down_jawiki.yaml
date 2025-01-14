@@ -58,7 +58,6 @@ jobs:
             innodb_dedicated_server=ON
             innodb_flush_log_at_trx_commit=2
             sync_binlog=0
-            autocommit=0
 
       - name: Get previous pubDate
         uses: actions/cache@v4
@@ -86,6 +85,7 @@ jobs:
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
         run: |
           7z x temp.sql.gz
+          rm temp.sql.gz
 
       - name: Import sql to mysql
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
