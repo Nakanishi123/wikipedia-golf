@@ -52,7 +52,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: prevPubDate.txt
-          key: ${{matrix.files.file}}
+          key: ${{matrix.files.file}}-prevPubDate.txt
 
       - name: Get RSS pubDate and set UPDATED
         run: |
@@ -164,7 +164,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: prevPubDate.txt
-          key: ${{matrix.files.file}}
+          key: ${{matrix.files.file}}-prevPubDate.txt
 
   release:
     needs: download
