@@ -41,6 +41,11 @@ jobs:
       - uses: actions/setup-python@v5
       - run: pip install mysql-to-sqlite3
 
+      - name: Install pv
+        run: |
+          sudo apt-get update
+          sudo apt-get install pv
+
       - name: Start MySQL
         uses: shogo82148/actions-setup-mysql@v1
         with:
@@ -82,7 +87,7 @@ jobs:
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
         run: |
           mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS jawiki;"
-          mysql -u root -proot jawiki < temp.sql
+          pv temp.sql | mysql -u root -proot jawiki
 
       - name: Export to sqlite
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
