@@ -87,7 +87,7 @@ jobs:
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
         run: |
           mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS jawiki;"
-          pv temp.sql | mysql -u root -proot jawiki
+          pv -f temp.sql | mysql -u root -proot jawiki
 
       - name: Export to sqlite
         if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
