@@ -36,15 +36,68 @@ jobs:
             }
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-      - run: pip install mysql-to-sqlite3
 
-      - name: Install pv
+      - name: Checkout mysql2sqlite
+        uses: actions/checkout@v4
+        with:
+          repository: "mysql2sqlite/mysql2sqlite"
+          path: "mysql2sqlite"
+
+      - name: Get previous pubDate
+        uses: actions/cache@v4
+        with:
+          path: prevPubDate.txt
+          key: rss-${{matrix.files.file}}
+
+      - name: Date to environment variable
+        run: echo "PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo '😊')" >> $GITHUB_ENV
+
+      - name: Get RSS pubDate and set UPDATED
         run: |
+          PUB_DATE=$(
+            wget -q -O - https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.rss}} | 
+            awk -F'<pubDate>|</pubDate>' '{if ($2 != "") print $2}'
+          )
+
+          PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo '😊')
+          if [ "$PREV_PUB_DATE" != "$PUB_DATE" ]; then
+            echo "UPDATED=true" >> $GITHUB_ENV
+          else
+            echo "UPDATED=" >> $GITHUB_ENV # empty if false
+          fi
+
+      - name: Download
+        if: ${{env.UPDATED}}
+        run: |
+          wget -q -O temp.sql.gz https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.file}}
+
+      - name: Extract
+        if: ${{env.UPDATED}}
+        run: |
+          7z x temp.sql.gz
+          rm temp.sql.gz
+
+      - name: Convert by mysql2sqlite.sh
+        id: mysql2sqlite-sh
+        if: ${{env.UPDATED}}
+        continue-on-error: true
+        run: |
+          mysql2sqlite/mysql2sqlite temp.sql | sqlite3 ${{matrix.files.sqlite}}
+
+      - uses: actions/setup-python@v5
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies for python mysql2sqlite
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        run: |
+          pip install mysql-to-sqlite3
           sudo apt-get update
           sudo apt-get install pv
 
       - name: Start MySQL
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
         uses: shogo82148/actions-setup-mysql@v1
         with:
           mysql-version: "9.0"
@@ -57,52 +110,24 @@ jobs:
             innodb_flush_log_at_trx_commit=2
             sync_binlog=0
 
-      - name: Get previous pubDate
-        uses: actions/cache@v4
-        with:
-          path: prevPubDate.txt
-          key: rss-${{matrix.files.file}}
-
-      - name: Date to environment variable
-        run: echo "PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo 'Thu, 01 Jan 1970 11:45:14 GMT')" >> $GITHUB_ENV
-
-      - name: Get RSS pubDate
-        run: |
-          PUB_DATE=$(
-            wget -q -O - https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.rss}} | 
-            awk -F'<pubDate>|</pubDate>' '{if ($2 != "") print $2}'
-          )
-          echo "PUB_DATE=$PUB_DATE" >> $GITHUB_ENV
-
-      - name: Download
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
-        run: |
-          wget -q -O temp.sql.gz https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.file}}
-
-      - name: Extract
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
-        run: |
-          7z x temp.sql.gz
-          rm temp.sql.gz
-
       - name: Import sql to mysql
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
         run: |
           mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS jawiki;"
           pv -f temp.sql | mysql -u root -proot jawiki
 
       - name: Export to sqlite
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
         run: |
           mysql2sqlite -f ${{matrix.files.sqlite}} -d jawiki -u root --mysql-password root
 
       - name: Compress
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        if: ${{env.UPDATED}}
         run: |
           7z a ${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
 
       - name: Upload Artifact
-        if: ${{env.PREV_PUB_DATE != env.PUB_DATE}}
+        if: ${{env.UPDATED}}
         uses: actions/upload-artifact@v4
         with:
           name: ${{matrix.files.sqlite}}.7z
