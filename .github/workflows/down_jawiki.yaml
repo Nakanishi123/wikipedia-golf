@@ -52,9 +52,13 @@ jobs:
           mysql-version: "9.0"
           root-password: root
           my-cnf: |
+            skip_innodb_doublewrite
+            disable_log_bin
+            innodb_log_writer_threads=OFF
             innodb_dedicated_server=ON
             innodb_flush_log_at_trx_commit=2
             sync_binlog=0
+            autocommit=0
 
       - name: Get previous pubDate
         uses: actions/cache@v4
