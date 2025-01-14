@@ -72,7 +72,7 @@ jobs:
       - name: Make release_body.rtxt (For Release Body)
         run: |
           mkdir -p artifacts
-          echo "| ${{matrix.files.file}} | $PUB_DATE | ${{env.UPDATED}} |" >> artifacts/release_body.rtxt.${{matrix.files.file}}
+          echo "| ${{matrix.files.file}} | ${{env.PUB_DATE}} | ${{env.UPDATED}} |" >> artifacts/release_body.rtxt.${{matrix.files.file}}
 
       - name: Download
         if: ${{env.UPDATED}}
