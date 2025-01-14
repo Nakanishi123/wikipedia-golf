@@ -124,14 +124,20 @@ jobs:
       - name: Compress
         if: ${{env.UPDATED}}
         run: |
-          7z a ${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
+          mkdir -p artifacts
+          filesize=$(stat --format="%s" ${{matrix.files.sqlite}})
+          if((filesize <= 2147483648)); then
+            7z a artifacts/${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
+          else
+            7z a -v1999m artifacts/${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
+          fi
 
       - name: Upload Artifact
         if: ${{env.UPDATED}}
         uses: actions/upload-artifact@v4
         with:
           name: ${{matrix.files.sqlite}}.7z
-          path: ${{matrix.files.sqlite}}.7z
+          path: artifacts/*
           if-no-files-found: error
 
   release:
