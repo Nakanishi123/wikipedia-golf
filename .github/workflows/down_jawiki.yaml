@@ -2,7 +2,7 @@ name: Download jawiki
 
 on:
   schedule:
-    - cron: "0 17 13 * *"
+    - cron: "17 17 6,21 * *"
   workflow_dispatch:
 
 env:
