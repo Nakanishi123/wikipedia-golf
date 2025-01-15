@@ -1,7 +1,12 @@
 name: Download jawiki
 
 on:
+  schedule:
+    - cron: "17 17 6,21 * *"
   workflow_dispatch:
+
+env:
+  RELEASE_API: https://api.github.com/repos/nakanishi123/wikipedia-golf/releases/latest
 
 jobs:
   download:
@@ -47,10 +52,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: prevPubDate.txt
-          key: rss-${{matrix.files.file}}
-
-      - name: Date to environment variable
-        run: echo "PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo '😊')" >> $GITHUB_ENV
+          key: ${{matrix.files.file}}-prevPubDate.txt
 
       - name: Get RSS pubDate and set UPDATED
         run: |
@@ -58,13 +60,19 @@ jobs:
             wget -q -O - https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.rss}} | 
             awk -F'<pubDate>|</pubDate>' '{if ($2 != "") print $2}'
           )
+          echo "PUB_DATE=$PUB_DATE" >> $GITHUB_ENV
 
           PREV_PUB_DATE=$(cat prevPubDate.txt 2>/dev/null || echo '😊')
           if [ "$PREV_PUB_DATE" != "$PUB_DATE" ]; then
-            echo "UPDATED=true" >> $GITHUB_ENV
+            echo "UPDATED=UPDATED" >> $GITHUB_ENV
           else
             echo "UPDATED=" >> $GITHUB_ENV # empty if false
           fi
+
+      - name: Make release_body.rtxt (For Release Body)
+        run: |
+          mkdir -p artifacts
+          echo "| ${{matrix.files.file}} | ${{env.PUB_DATE}} | ${{env.UPDATED}} |" >> artifacts/release_body.rtxt.${{matrix.files.file}}
 
       - name: Download
         if: ${{env.UPDATED}}
@@ -121,24 +129,41 @@ jobs:
         run: |
           mysql2sqlite -f ${{matrix.files.sqlite}} -d jawiki -u root --mysql-password root
 
-      - name: Compress
+      - name: Compress and split
         if: ${{env.UPDATED}}
         run: |
-          mkdir -p artifacts
-          filesize=$(stat --format="%s" ${{matrix.files.sqlite}})
+          7z a ${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
+
+          filesize=$(stat --format="%s" ${{matrix.files.sqlite}}.7z)
           if((filesize <= 2147483648)); then
-            7z a artifacts/${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
+            mv ${{matrix.files.sqlite}}.7z artifacts/
           else
-            7z a -v1999m artifacts/${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
+            split --numeric-suffixes=1 -a 3 -b 2000m ${{matrix.files.sqlite}}.7z artifacts/${{matrix.files.sqlite}}.7z.
           fi
 
+      - name: Download Release when not updated
+        if: ${{!env.UPDATED}}
+        run: |
+          files=$(wget -qO- ${{env.RELEASE_API}} | jq -r '.assets[] | select(.name | startswith("${{matrix.files.sqlite}}")) | .browser_download_url')
+          for file in $files; do
+            wget -P artifacts $file
+          done
+
       - name: Upload Artifact
-        if: ${{env.UPDATED}}
         uses: actions/upload-artifact@v4
         with:
           name: ${{matrix.files.sqlite}}.7z
           path: artifacts/*
           if-no-files-found: error
+
+      - name: Save pubDate
+        run: echo ${{env.PUB_DATE}} > prevPubDate.txt
+
+      - name: Save pubDate
+        uses: actions/cache/save@v4
+        with:
+          path: prevPubDate.txt
+          key: ${{matrix.files.file}}-prevPubDate.txt
 
   release:
     needs: download
@@ -158,11 +183,23 @@ jobs:
           path: ./artifacts/
           merge-multiple: true
 
+      - name: Make Release Body
+        run: |
+          echo "RELEASE_TEXT<<EOF"            >> $GITHUB_ENV
+          echo "## wikipedia jawiki"          >> $GITHUB_ENV
+          echo ""                             >> $GITHUB_ENV
+          echo "| File | Date | Updated |"    >> $GITHUB_ENV
+          echo "| ---- | ---- | ------- |"    >> $GITHUB_ENV
+          cat ./artifacts/release_body.rtxt.* >> $GITHUB_ENV
+          echo "EOF"                          >> $GITHUB_ENV
+
+          rm ./artifacts/release_body.rtxt.*
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.DATE }}
           name: ${{ env.DATE }}
-          body: ${{ env.DATE }}
+          body: ${{ env.RELEASE_TEXT }}
           files: |
             ./artifacts/*
