@@ -120,6 +120,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: ${{matrix.files.file}}-temp.sql.gz
+          merge-multiple: true
 
       - name: Check temp.sql.gz
         run: |
@@ -202,6 +203,7 @@ jobs:
         with:
           pattern: ${{matrix.files.sqlite}}.splited.sqlite*
           path: splited
+          merge-multiple: true
 
       - name: Check splited sqlite files
         run: |
