@@ -53,7 +53,7 @@ jobs:
             )
 
             echo "matrix-json=${output}" >> $GITHUB_OUTPUT
-            echo "matrix-json-only-1=$(echo $output | jq -cs '[.[] | select(.["matrix-num"] == 1)]')" >> $GITHUB_OUTPUT
+            echo "matrix-json-only-1=$(echo $output | jq -c '[.[] | select(.["matrix-num"] == 1)]')" >> $GITHUB_OUTPUT
 
   download:
     needs: make-matrix
