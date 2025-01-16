@@ -266,7 +266,7 @@ jobs:
           key: ${{matrix.files.file}}-prevPubDate.txt
 
   release:
-    needs: download
+    needs: merge-sqlite
     permissions:
       contents: write
     runs-on: ubuntu-latest
