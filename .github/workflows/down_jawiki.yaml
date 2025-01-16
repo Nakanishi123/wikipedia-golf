@@ -107,6 +107,15 @@ jobs:
           name: release_body.rtxt.${{matrix.files.file}}
           path: release_body.rtxt.${{matrix.files.file}}
 
+      - name: Save temp pubDate
+        run: echo ${{env.PUB_DATE}} > prevPubDate.txt
+
+      - name: Save temp pubDate
+        uses: actions/cache/save@v4
+        with:
+          path: prevPubDate.txt
+          key: ${{matrix.files.file}}-temp-prevPubDate.txt
+
   mysql2sqlite:
     needs: [make-matrix, download]
     runs-on: ubuntu-latest
@@ -258,8 +267,11 @@ jobs:
           path: artifacts/*
           if-no-files-found: error
 
-      - name: Save pubDate
-        run: echo ${{env.PUB_DATE}} > prevPubDate.txt
+      - name: Get temp pubDate
+        uses: actions/cache@v4
+        with:
+          path: prevPubDate.txt
+          key: ${{matrix.files.file}}-temp-prevPubDate.txt
 
       - name: Save pubDate
         uses: actions/cache/save@v4
