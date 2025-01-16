@@ -42,12 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout mysql2sqlite
-        uses: actions/checkout@v4
-        with:
-          repository: "mysql2sqlite/mysql2sqlite"
-          path: "mysql2sqlite"
-
       - name: Get previous pubDate
         uses: actions/cache@v4
         with:
@@ -85,27 +79,20 @@ jobs:
           7z x temp.sql.gz
           rm temp.sql.gz
 
-      - name: Convert by mysql2sqlite.sh
-        id: mysql2sqlite-sh
-        if: ${{env.UPDATED}}
-        continue-on-error: true
-        run: |
-          mysql2sqlite/mysql2sqlite temp.sql | sqlite3 ${{matrix.files.sqlite}}
-
       - uses: actions/setup-python@v5
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        if: ${{env.UPDATED}}
         with:
           python-version: "3.12"
 
       - name: Install dependencies for python mysql2sqlite
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        if: ${{env.UPDATED}}
         run: |
           pip install mysql-to-sqlite3
           sudo apt-get update
           sudo apt-get install pv
 
       - name: Start MySQL
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        if: ${{env.UPDATED}}
         uses: shogo82148/actions-setup-mysql@v1
         with:
           mysql-version: "9.0"
@@ -118,16 +105,55 @@ jobs:
             innodb_flush_log_at_trx_commit=2
             sync_binlog=0
 
-      - name: Import sql to mysql
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+      - name: Split SQL file
+        if: ${{env.UPDATED}}
+        run: |
+          awk '/^INSERT INTO/ {
+            if (row++ % 2 == 0) print > "odd.sql"; 
+            else print > "even.sql";
+            next;
+          } {
+            print > "odd.sql"; 
+            print > "even.sql";
+          }' temp.sql
+
+          rm temp.sql
+
+      - name: Import SQL Dump into MySQL (odd)
+        if: ${{env.UPDATED}}
         run: |
           mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS jawiki;"
-          pv -f temp.sql | mysql -u root -proot jawiki
+          pv -f odd.sql | mysql -u root -proot jawiki
+          rm odd.sql
 
-      - name: Export to sqlite
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+      - name: Export MySQL Database to SQLite and Clean Up (odd)
+        if: ${{env.UPDATED}}
         run: |
-          mysql2sqlite -f ${{matrix.files.sqlite}} -d jawiki -u root --mysql-password root
+          mysql2sqlite -f odd.sqlite -d jawiki -u root --mysql-password root
+          mysql -u root -proot -e "DROP DATABASE jawiki;"
+
+      - name: Import SQL Dump into MySQL (even)
+        if: ${{env.UPDATED}}
+        run: |
+          mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS jawiki;"
+          pv -f even.sql | mysql -u root -proot jawiki
+          rm even.sql
+
+      - name: Export MySQL Database to SQLite and Clean Up (even)
+        if: ${{env.UPDATED}}
+        run: |
+          mysql2sqlite -f even.sqlite -d jawiki -u root --mysql-password root
+          mysql -u root -proot -e "DROP DATABASE jawiki;"
+
+      - name: Merge sqlite
+        run: |
+          table=$(sqlite3 odd.sqlite ".tables")
+          sqlite3 odd.sqlite "
+            ATTACH 'even.sqlite' AS even;
+            INSERT INTO $table SELECT * FROM even.$table;
+            DETACH DATABASE even;
+            "
+            mv odd.sqlite ${{matrix.files.sqlite}}
 
       - name: Compress and split
         if: ${{env.UPDATED}}
