@@ -146,6 +146,7 @@ jobs:
           mysql -u root -proot -e "DROP DATABASE jawiki;"
 
       - name: Merge sqlite
+        if: ${{env.UPDATED}}
         run: |
           table=$(sqlite3 odd.sqlite ".tables")
           sqlite3 odd.sqlite "
