@@ -29,7 +29,7 @@ jobs:
             },
             {
                 "name": "jawiki-latest-pagelinks",
-                "matrix": 8
+                "matrix": 16
             },
             {
                 "name": "jawiki-latest-linktarget",
