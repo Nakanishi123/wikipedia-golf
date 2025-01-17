@@ -9,47 +9,63 @@ env:
   RELEASE_API: https://api.github.com/repos/nakanishi123/wikipedia-golf/releases/latest
 
 jobs:
+  make-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix-json: ${{ steps.make-matrix.outputs.matrix-json }}
+      matrix-json-only-1: ${{ steps.make-matrix.outputs.matrix-json-only-1 }}
+    steps:
+      - name: Make matrix
+        id: make-matrix
+        run: |
+          SETTING='[
+            {
+                "name": "jawiki-latest-redirect",
+                "matrix": 1
+            },
+            {
+                "name": "jawiki-latest-page",
+                "matrix": 1
+            },
+            {
+                "name": "jawiki-latest-pagelinks",
+                "matrix": 16
+            },
+            {
+                "name": "jawiki-latest-linktarget",
+                "matrix": 1
+            },
+            {
+                "name": "jawiki-latest-categorylinks",
+                "matrix": 4
+            }]'
+            
+            output=$(
+            echo $SETTING | jq -c '.[]' | 
+            while read -r item; do
+              name=$(echo "$item" | jq -r '.name')
+              matrix=$(echo "$item" | jq '.matrix')
+              for i in $(seq 1 "$matrix"); do
+                jq -n --arg name "$name" --argjson matrix "$matrix" --argjson i "$i" \
+                '{"file": "\($name).sql.gz", "rss": "\($name).sql.gz-rss.xml", "sqlite": "\($name).sqlite", "total-matrix": $matrix, "matrix-num": $i}'
+              done
+            done | jq -s -c '.'
+            )
+
+            echo "matrix-json=${output}" >> $GITHUB_OUTPUT
+            echo "matrix-json-only-1=$(echo $output | jq -c '[.[] | select(.["matrix-num"] == 1)]')" >> $GITHUB_OUTPUT
+
   download:
+    needs: make-matrix
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        files:
-          - {
-              file: "jawiki-latest-redirect.sql.gz",
-              rss: "jawiki-latest-redirect.sql.gz-rss.xml",
-              sqlite: "jawiki-latest-redirect.sqlite",
-            }
-          - {
-              file: "jawiki-latest-page.sql.gz",
-              rss: "jawiki-latest-page.sql.gz-rss.xml",
-              sqlite: "jawiki-latest-page.sqlite",
-            }
-          - {
-              file: "jawiki-latest-pagelinks.sql.gz",
-              rss: "jawiki-latest-pagelinks.sql.gz-rss.xml",
-              sqlite: "jawiki-latest-pagelinks.sqlite",
-            }
-          - {
-              file: "jawiki-latest-linktarget.sql.gz",
-              rss: "jawiki-latest-linktarget.sql.gz-rss.xml",
-              sqlite: "jawiki-latest-linktarget.sqlite",
-            }
-          - {
-              file: "jawiki-latest-categorylinks.sql.gz",
-              rss: "jawiki-latest-categorylinks.sql.gz-rss.xml",
-              sqlite: "jawiki-latest-categorylinks.sqlite",
-            }
+        files: ${{fromJson(needs.make-matrix.outputs.matrix-json-only-1)}}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout mysql2sqlite
-        uses: actions/checkout@v4
-        with:
-          repository: "mysql2sqlite/mysql2sqlite"
-          path: "mysql2sqlite"
-
-      - name: Get previous pubDate
-        uses: actions/cache@v4
+      - name: Get cache previous pubDate
+        uses: actions/cache/restore@v4
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-prevPubDate.txt
@@ -71,13 +87,57 @@ jobs:
 
       - name: Make release_body.rtxt (For Release Body)
         run: |
-          mkdir -p artifacts
-          echo "| ${{matrix.files.file}} | ${{env.PUB_DATE}} | ${{env.UPDATED}} |" >> artifacts/release_body.rtxt.${{matrix.files.file}}
+          echo "| ${{matrix.files.file}} | ${{env.PUB_DATE}} | ${{env.UPDATED}} |" >> release_body.rtxt.${{matrix.files.file}}
 
       - name: Download
         if: ${{env.UPDATED}}
         run: |
           wget -q -O temp.sql.gz https://dumps.wikimedia.org/jawiki/latest/${{matrix.files.file}}
+
+      - name: Upload temp.sql.gz (${{matrix.files.file}}-temp.sql.gz)
+        if: ${{env.UPDATED}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{matrix.files.file}}-temp.sql.gz
+          path: temp.sql.gz
+
+      - name: Upload release_body.rtxt
+        uses: actions/upload-artifact@v4
+        with:
+          name: release_body.rtxt.${{matrix.files.file}}
+          path: release_body.rtxt.${{matrix.files.file}}
+
+      - name: Save temp pubDate
+        run: echo ${{env.PUB_DATE}} > prevPubDate.txt
+
+      - name: Save cache temp pubDate
+        uses: actions/cache/save@v4
+        with:
+          path: prevPubDate.txt
+          key: ${{matrix.files.file}}-temp-prevPubDate.txt
+
+  mysql2sqlite:
+    needs: [make-matrix, download]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        files: ${{fromJson(needs.make-matrix.outputs.matrix-json)}}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download temp.sql.gz
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{matrix.files.file}}-temp.sql.gz
+          merge-multiple: true
+
+      - name: Check temp.sql.gz
+        run: |
+          if [ -f temp.sql.gz ]; then
+            echo "UPDATED=True" >> $GITHUB_ENV
+          else
+            echo "UPDATED=" >> $GITHUB_ENV
+          fi
 
       - name: Extract
         if: ${{env.UPDATED}}
@@ -85,27 +145,20 @@ jobs:
           7z x temp.sql.gz
           rm temp.sql.gz
 
-      - name: Convert by mysql2sqlite.sh
-        id: mysql2sqlite-sh
-        if: ${{env.UPDATED}}
-        continue-on-error: true
-        run: |
-          mysql2sqlite/mysql2sqlite temp.sql | sqlite3 ${{matrix.files.sqlite}}
-
       - uses: actions/setup-python@v5
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        if: ${{env.UPDATED}}
         with:
           python-version: "3.12"
 
       - name: Install dependencies for python mysql2sqlite
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        if: ${{env.UPDATED}}
         run: |
           pip install mysql-to-sqlite3
           sudo apt-get update
           sudo apt-get install pv
 
       - name: Start MySQL
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+        if: ${{env.UPDATED}}
         uses: shogo82148/actions-setup-mysql@v1
         with:
           mysql-version: "9.0"
@@ -118,20 +171,81 @@ jobs:
             innodb_flush_log_at_trx_commit=2
             sync_binlog=0
 
-      - name: Import sql to mysql
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+      - name: Split SQL file
+        if: ${{env.UPDATED}}
+        run: |
+          awk '!/^INSERT INTO/ || (row++ % ${{matrix.files.total-matrix}} + 1) == ${{matrix.files.matrix-num}} { print > "do.sql" }' temp.sql
+          rm temp.sql
+
+      - name: Import SQL Dump into MySQL
+        if: ${{env.UPDATED}}
         run: |
           mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS jawiki;"
-          pv -f temp.sql | mysql -u root -proot jawiki
+          pv -f do.sql | mysql -u root -proot jawiki
+          rm do.sql
 
-      - name: Export to sqlite
-        if: ${{env.UPDATED && steps.mysql2sqlite-sh.outcome == 'failure'}}
+      - name: Export MySQL Database to SQLite and Clean Up
+        if: ${{env.UPDATED}}
         run: |
-          mysql2sqlite -f ${{matrix.files.sqlite}} -d jawiki -u root --mysql-password root
+          mysql2sqlite -f ${{matrix.files.matrix-num}}.sqlite -d jawiki -u root --mysql-password root
+          mysql -u root -proot -e "DROP DATABASE jawiki;"
+
+      - name: Upload splited sqlite
+        if: ${{env.UPDATED}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{matrix.files.sqlite}}.splited.sqlite${{matrix.files.matrix-num}}
+          path: ${{matrix.files.matrix-num}}.sqlite
+
+  merge-sqlite:
+    needs: [make-matrix, mysql2sqlite]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        files: ${{fromJson(needs.make-matrix.outputs.matrix-json-only-1)}}
+    steps:
+      - name: Download splited sqlite
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{matrix.files.sqlite}}.splited.sqlite*
+          path: splited
+          merge-multiple: true
+
+      - name: Check splited sqlite files
+        run: |
+          if find splited/ -type f | grep -q .; then
+            echo "UPDATED=True" >> $GITHUB_ENV
+          else
+            echo "UPDATED=" >> $GITHUB_ENV
+          fi
+
+      - name: Check Disk Space (Debug)
+        run: df -h
+
+      - name: Merge sqlite
+        if: ${{env.UPDATED}}
+        run: |
+          mv splited/1.sqlite 1.sqlite
+          table=$(sqlite3 1.sqlite ".tables")
+
+          shopt -s nullglob # Prevent error when no files
+          for file in splited/*.sqlite; do
+            sqlite3 1.sqlite "
+              ATTACH '$file' AS temp_db;
+              INSERT INTO $table SELECT * FROM temp_db.$table;
+              DETACH DATABASE temp_db;
+              "
+            rm $file
+            echo "Merged $file"
+          done
+
+          shopt -u nullglob
+          mv 1.sqlite ${{matrix.files.sqlite}}
 
       - name: Compress and split
         if: ${{env.UPDATED}}
         run: |
+          mkdir -p artifacts
           7z a ${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
 
           filesize=$(stat --format="%s" ${{matrix.files.sqlite}}.7z)
@@ -152,21 +266,24 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{matrix.files.sqlite}}.7z
+          name: compressed-sqlite-${{matrix.files.sqlite}}
           path: artifacts/*
           if-no-files-found: error
 
-      - name: Save pubDate
-        run: echo ${{env.PUB_DATE}} > prevPubDate.txt
+      - name: Get cache temp pubDate
+        uses: actions/cache/restore@v4
+        with:
+          path: prevPubDate.txt
+          key: ${{matrix.files.file}}-temp-prevPubDate.txt
 
-      - name: Save pubDate
+      - name: Save cache pubDate
         uses: actions/cache/save@v4
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-prevPubDate.txt
 
   release:
-    needs: download
+    needs: merge-sqlite
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -181,6 +298,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./artifacts/
+          pattern: compressed-sqlite-*
+          merge-multiple: true
+
+      - name: Download Release Body
+        uses: actions/download-artifact@v4
+        with:
+          path: release_bodies
+          pattern: release_body.rtxt.*
           merge-multiple: true
 
       - name: Make Release Body
@@ -190,10 +315,8 @@ jobs:
           echo ""                             >> $GITHUB_ENV
           echo "| File | Date | Updated |"    >> $GITHUB_ENV
           echo "| ---- | ---- | ------- |"    >> $GITHUB_ENV
-          cat ./artifacts/release_body.rtxt.* >> $GITHUB_ENV
+          cat ./release_bodies/*              >> $GITHUB_ENV
           echo "EOF"                          >> $GITHUB_ENV
-
-          rm ./artifacts/release_body.rtxt.*
 
       - name: Release
         uses: softprops/action-gh-release@v2
