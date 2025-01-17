@@ -243,6 +243,7 @@ jobs:
       - name: Compress and split
         if: ${{env.UPDATED}}
         run: |
+          mkdir -p artifacts
           7z a ${{matrix.files.sqlite}}.7z ${{matrix.files.sqlite}}
 
           filesize=$(stat --format="%s" ${{matrix.files.sqlite}}.7z)
