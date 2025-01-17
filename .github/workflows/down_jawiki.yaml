@@ -174,7 +174,7 @@ jobs:
       - name: Split SQL file
         if: ${{env.UPDATED}}
         run: |
-          awk '!/^INSERT INTO/ || row++ % ${{matrix.files.total-matrix}} == ${{matrix.files.matrix-num}} { print > "do.sql" }' temp.sql
+          awk '!/^INSERT INTO/ || (row++ % ${{matrix.files.total-matrix}} + 1) == ${{matrix.files.matrix-num}} { print > "do.sql" }' temp.sql
           rm temp.sql
 
       - name: Import SQL Dump into MySQL
