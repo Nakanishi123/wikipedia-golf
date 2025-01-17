@@ -303,7 +303,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release_bodies
-          name: release_body.rtxt.*
+          pattern: release_body.rtxt.*
           merge-multiple: true
 
       - name: Make Release Body
