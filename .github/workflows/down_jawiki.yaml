@@ -204,9 +204,6 @@ jobs:
       matrix:
         files: ${{fromJson(needs.make-matrix.outputs.matrix-json-only-1)}}
     steps:
-      - name: Checkout this repository
-        uses: actions/checkout@v4
-
       - name: Download splited sqlite
         uses: actions/download-artifact@v4
         with:
@@ -235,6 +232,8 @@ jobs:
               INSERT INTO $table SELECT * FROM temp_db.$table;
               DETACH DATABASE temp_db;
               "
+            rm $file
+            echo "Merged $file"
           done
 
           shopt -u nullglob
