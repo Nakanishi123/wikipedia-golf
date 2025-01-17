@@ -219,6 +219,9 @@ jobs:
             echo "UPDATED=" >> $GITHUB_ENV
           fi
 
+      - name: Check Disk Space (Debug)
+        run: df -h
+
       - name: Merge sqlite
         if: ${{env.UPDATED}}
         run: |
