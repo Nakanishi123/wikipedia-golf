@@ -65,7 +65,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Get cache previous pubDate
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-prevPubDate.txt
@@ -269,7 +269,7 @@ jobs:
           if-no-files-found: error
 
       - name: Get cache temp pubDate
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-temp-prevPubDate.txt
