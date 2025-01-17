@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get previous pubDate
+      - name: Get cache previous pubDate
         uses: actions/cache@v4
         with:
           path: prevPubDate.txt
@@ -110,7 +110,7 @@ jobs:
       - name: Save temp pubDate
         run: echo ${{env.PUB_DATE}} > prevPubDate.txt
 
-      - name: Save temp pubDate
+      - name: Save cache temp pubDate
         uses: actions/cache/save@v4
         with:
           path: prevPubDate.txt
@@ -267,13 +267,13 @@ jobs:
           path: artifacts/*
           if-no-files-found: error
 
-      - name: Get temp pubDate
+      - name: Get cache temp pubDate
         uses: actions/cache@v4
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-temp-prevPubDate.txt
 
-      - name: Save pubDate
+      - name: Save cache pubDate
         uses: actions/cache/save@v4
         with:
           path: prevPubDate.txt
