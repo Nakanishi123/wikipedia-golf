@@ -1,0 +1,69 @@
+name: Parse SQL
+
+on:
+  workflow_dispatch:
+
+env:
+  RELEASE_API: https://api.github.com/repos/nakanishi123/wikipedia-golf/releases/latest
+
+jobs:
+  get-release-infos:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.get-release-info.outputs.tag_name }}
+      name: ${{ steps.get-release-info.outputs.tag_name }}
+      body: ${{ steps.get-release-info.outputs.body }}
+    steps:
+      - name: Get Latest Tag Name
+        id: get-release-info
+        run: |
+          wget -O latest.json $RELEASE_API
+          echo "tag_name=$(jq -r .tag_name latest.json)" >> $GITHUB_OUTPUT
+            echo "name=$(jq -r .name latest.json)"       >> $GITHUB_OUTPUT
+          echo "body<<EOF"                               >> $GITHUB_OUTPUT
+          jq -r .body latest.json                        >> $GITHUB_OUTPUT
+          echo "EOF"                                     >> $GITHUB_OUTPUT
+
+  concat-pages-redirect:
+    needs: get-release-infos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check disk space 1
+        run: df -h
+      - name: "node-cleanup"
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          sudo docker builder prune -a
+      - name: Check disk space 2
+        run: df -h
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SQL
+        run: |
+          wget -O release.json ${{env.RELEASE_API}}
+
+          pages=$(cat release.json | jq -r '.assets[] | select(.browser_download_url | test("page\\.sqlite")) | .url')  
+          wget -O jawiki-latest-page.sqlite.7z $pages
+          7z x jawiki-latest-page.sqlite.7z
+          rm jawiki-latest-page.sqlite.7z
+
+          redirect=$(cat release.json | jq -r '.assets[] | select(.browser_download_url | test("redirect\\.sqlite")) | .url')
+          wget -O jawiki-latest-redirect.sqlite.7z $redirect
+          7z x jawiki-latest-redirect.sqlite.7z
+          rm jawiki-latest-redirect.sqlite.7z
+
+      - name: Parse SQL
+        run: python3 python/src/page_redirect.py --page jawiki-latest-page.sqlite --redirect jawiki-latest-redirect.sqlite --output pages_redirect.sqlite
+
+      - name: compress
+        run: zstd -11 pages_redirect.sqlite -o pages_redirect.sqlite.zst
+
+      - name: Release Pages Redirect
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
+          name: ${{ needs.get-release-infos.outputs.name }}
+          body: ${{ needs.get-release-infos.outputs.body }}
+          files: pages_redirect.sqlite.zst
