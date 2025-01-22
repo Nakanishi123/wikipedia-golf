@@ -26,6 +26,8 @@ jobs:
 
   concat-pages-redirect:
     needs: get-release-infos
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Check disk space 1
