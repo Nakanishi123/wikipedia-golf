@@ -42,7 +42,7 @@ jobs:
 
       - name: Download SQL
         run: |
-          wget -O release.json $RELEASE_API
+          wget -O release.json ${{env.RELEASE_API}}
 
           pages=$(cat release.json | jq -r '.assets[] | select(.browser_download_url | test("page\\.sqlite")) | .url')  
           wget -O jawiki-latest-page.sqlite.7z $pages
