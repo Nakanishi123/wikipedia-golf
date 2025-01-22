@@ -9,6 +9,13 @@ if __name__ == "__main__":
     parser.add_argument("--output", "-o", type=Path, required=True, help="出力先のデータベースのパス")
     args = parser.parse_args()
 
+    if not args.page.exists():
+        print(f"{args.page}が存在しません")
+        exit(1)
+    if not args.redirect.exists():
+        print(f"{args.redirect}が存在しません")
+        exit(1)
+
     conn = sqlite3.connect(f"{args.output}")
     cur = conn.cursor()
     cur.execute("ATTACH DATABASE ? AS redirect", (f"{args.redirect}",))
