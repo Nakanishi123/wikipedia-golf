@@ -24,7 +24,7 @@ jobs:
           jq -r .body latest.json                        >> $GITHUB_OUTPUT
           echo "EOF"                                     >> $GITHUB_OUTPUT
 
-  concat-pages-redirect:
+  concat-page-redirect:
     needs: get-release-infos
     permissions:
       contents: write
@@ -46,8 +46,8 @@ jobs:
         run: |
           wget -O release.json ${{env.RELEASE_API}}
 
-          pages=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("page\\.sqlite"))')  
-          wget -q -O jawiki-latest-page.sqlite.7z $pages
+          page=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("page\\.sqlite"))')  
+          wget -q -O jawiki-latest-page.sqlite.7z $page
           7z x jawiki-latest-page.sqlite.7z
           rm jawiki-latest-page.sqlite.7z
 
@@ -57,15 +57,15 @@ jobs:
           rm jawiki-latest-redirect.sqlite.7z
 
       - name: Parse SQL
-        run: python3 python/src/page_redirect.py --page jawiki-latest-page.sqlite --redirect jawiki-latest-redirect.sqlite --output pages_redirect.sqlite
+        run: python3 python/src/page_redirect.py --page jawiki-latest-page.sqlite --redirect jawiki-latest-redirect.sqlite --output page_redirect.sqlite
 
       - name: compress
-        run: zstd -11 pages_redirect.sqlite -o pages_redirect.sqlite.zst
+        run: zstd -11 page_redirect.sqlite -o page_redirect.sqlite.zst
 
-      - name: Release Pages Redirect
+      - name: Release Page Redirect
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}
           body: ${{ needs.get-release-infos.outputs.body }}
-          files: pages_redirect.sqlite.zst
+          files: page_redirect.sqlite.zst
