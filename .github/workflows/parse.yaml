@@ -1,6 +1,7 @@
 name: Parse SQL
 
 on:
+  push:
   workflow_dispatch:
 
 env:
