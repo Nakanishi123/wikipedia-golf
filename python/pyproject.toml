@@ -1,0 +1,15 @@
+[project]
+name = "wikipedia-golf"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "rustworkx>=0.15.1",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "tqdm>=4.67.1",
+]
