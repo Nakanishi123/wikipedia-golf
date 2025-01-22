@@ -44,13 +44,13 @@ jobs:
         run: |
           wget -O release.json ${{env.RELEASE_API}}
 
-          pages=$(cat release.json | jq -r '.assets[] | select(.browser_download_url | test("page\\.sqlite")) | .url')  
-          wget -O jawiki-latest-page.sqlite.7z $pages
+          pages=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("page\\.sqlite"))')  
+          wget -q -O jawiki-latest-page.sqlite.7z $pages
           7z x jawiki-latest-page.sqlite.7z
           rm jawiki-latest-page.sqlite.7z
 
-          redirect=$(cat release.json | jq -r '.assets[] | select(.browser_download_url | test("redirect\\.sqlite")) | .url')
-          wget -O jawiki-latest-redirect.sqlite.7z $redirect
+          redirect=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("redirect\\.sqlite"))')
+          wget -q -O jawiki-latest-redirect.sqlite.7z $redirect
           7z x jawiki-latest-redirect.sqlite.7z
           rm jawiki-latest-redirect.sqlite.7z
 
