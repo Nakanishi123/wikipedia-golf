@@ -24,7 +24,7 @@ jobs:
           jq -r .body latest.json                        >> $GITHUB_OUTPUT
           echo "EOF"                                     >> $GITHUB_OUTPUT
 
-  concat-page-redirect:
+  page-redirect-linktarget:
     needs: get-release-infos
     permissions:
       contents: write
@@ -46,21 +46,31 @@ jobs:
         run: |
           wget -O release.json ${{env.RELEASE_API}}
 
-          page=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("page\\.sqlite"))')  
+          page=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("jawiki-latest-page.sqlite.7z"))')  
           wget -q -O jawiki-latest-page.sqlite.7z $page
           7z x jawiki-latest-page.sqlite.7z
           rm jawiki-latest-page.sqlite.7z
 
-          redirect=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("redirect\\.sqlite"))')
+          redirect=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("jawiki-latest-redirect.sqlite.7z"))')
           wget -q -O jawiki-latest-redirect.sqlite.7z $redirect
           7z x jawiki-latest-redirect.sqlite.7z
           rm jawiki-latest-redirect.sqlite.7z
 
+          redirect=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("jawiki-latest-linktarget.sqlite.7z"))')
+          wget -q -O jawiki-latest-linktarget.sqlite.7z $redirect
+          7z x jawiki-latest-linktarget.sqlite.7z
+          rm jawiki-latest-linktarget.sqlite.7z
+
       - name: Parse SQL
-        run: python3 python/src/page_redirect.py --page jawiki-latest-page.sqlite --redirect jawiki-latest-redirect.sqlite --output page_redirect.sqlite
+        run: |
+          python3 python/src/page_redirect_linktarget.py \
+          --page jawiki-latest-page.sqlite \
+          --redirect jawiki-latest-redirect.sqlite \
+          --linktarget jawiki-latest-linktarget.sqlite \
+          --output page_redirect_linktarget.sqlite
 
       - name: compress
-        run: zstd -11 page_redirect.sqlite -o page_redirect.sqlite.zst
+        run: zstd -20 page_redirect_linktarget.sqlite -o page_redirect_linktarget.sqlite.zst
 
       - name: Release Page Redirect
         uses: softprops/action-gh-release@v2
@@ -68,4 +78,4 @@ jobs:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}
           body: ${{ needs.get-release-infos.outputs.body }}
-          files: page_redirect.sqlite.zst
+          files: page_redirect_linktarget.sqlite.zst
