@@ -78,7 +78,7 @@ jobs:
       - name: compress
         run: 7z a parsed.sqlite.7z parsed.sqlite
 
-      - name: Release Page Redirect
+      - name: Release Parsed SQL
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
