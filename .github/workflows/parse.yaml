@@ -42,7 +42,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download SQL
+      - name: Download SQL and Extract
         run: |
           wget -O release.json ${{env.RELEASE_API}}
 
