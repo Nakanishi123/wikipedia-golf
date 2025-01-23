@@ -70,7 +70,7 @@ jobs:
           --output page_redirect_linktarget.sqlite
 
       - name: compress
-        run: zstd -20 page_redirect_linktarget.sqlite -o page_redirect_linktarget.sqlite.zst
+        run: zstd -19 page_redirect_linktarget.sqlite -o page_redirect_linktarget.sqlite.zst
 
       - name: Release Page Redirect
         uses: softprops/action-gh-release@v2
