@@ -67,6 +67,7 @@ jobs:
       - name: Run
         run: |
           mkdir output
+          chmod +x ./sql2bin
           ./sql2bin --db-path parsed.sqlite -o output
 
       - name: Release

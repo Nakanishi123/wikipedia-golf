@@ -1,0 +1,117 @@
+name: Search Longest Paths
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  RELEASE_API: https://api.github.com/repos/nakanishi123/wikipedia-golf/releases/latest
+
+jobs:
+  get-release-infos:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.get-release-info.outputs.tag_name }}
+      name: ${{ steps.get-release-info.outputs.tag_name }}
+      body: ${{ steps.get-release-info.outputs.body }}
+    steps:
+      - name: Get Latest Tag Name
+        id: get-release-info
+        run: |
+          wget -O latest.json ${{env.RELEASE_API}}
+          echo "tag_name=$(jq -r .tag_name latest.json)" >> $GITHUB_OUTPUT
+          echo "name=$(jq -r .name latest.json)"         >> $GITHUB_OUTPUT
+          echo "body<<EOF"                               >> $GITHUB_OUTPUT
+          jq -r .body latest.json                        >> $GITHUB_OUTPUT
+          echo "EOF"                                     >> $GITHUB_OUTPUT
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release --bin search_longest --manifest-path ./rust/Cargo.toml
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: search_longest
+          path: rust/target/release/search_longest
+          if-no-files-found: error
+
+  download-bin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: robinraju/release-downloader@v1
+        with:
+          latest: true
+          fileName: "*.bin.zst"
+
+      - name: Upload Bin
+        uses: actions/upload-artifact@v4
+        with:
+          name: download-bin
+          path: "*.bin.zst"
+
+  search-longest-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.make-matrix.outputs.matrix }}
+    steps:
+      - name: Make matrix
+        id: make-matrix
+        run: |
+          echo "matrix=$(jq -n '[range(256) | {matrix_num: ., matrix_size: 256}]')" >> $GITHUB_OUTPUT
+
+  search-longest:
+    runs-on: ubuntu-latest
+    needs: [build, download-bin, search-longest-matrix]
+    strategy:
+      matrix:
+        num: ${{fromJson(needs.search-longest-matrix.outputs.matrix)}}
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Run
+        run: |
+          chmod +x search_longest
+          ./search_longest --pages-bin pages.bin.zst \
+          --page-edges-bin page_edges.bin.zst \
+          --matrix-num ${{matrix.num.matrix_num}} \
+          --matrix-size ${{matrix.num.matrix_size}} \
+          -o shortest_paths${{matrix.num.matrix_num}}.json
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: shortest_paths-json-${{matrix.num.matrix_num}}
+          path: shortest_paths${{matrix.num.matrix_num}}.json
+
+  concat-and-release:
+    runs-on: ubuntu-latest
+    needs: [get-release-infos, search-longest]
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: shortest_paths-json-*
+          merge-multiple: true
+
+      - name: Concatenate
+        run: jq -sc 'add' *.json > shortest_paths.json
+
+      - name: Compress
+        run: 7z a shortest_paths.json.7z shortest_paths.json
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
+          name: ${{ needs.get-release-infos.outputs.name }}
+          body: ${{ needs.get-release-infos.outputs.body }}
+          files: shortest_paths.json.7z
