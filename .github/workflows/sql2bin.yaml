@@ -1,0 +1,78 @@
+name: SQL to Rust Binary
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  RELEASE_API: https://api.github.com/repos/nakanishi123/wikipedia-golf/releases/latest
+
+jobs:
+  get-release-infos:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.get-release-info.outputs.tag_name }}
+      name: ${{ steps.get-release-info.outputs.tag_name }}
+      body: ${{ steps.get-release-info.outputs.body }}
+    steps:
+      - name: Get Latest Tag Name
+        id: get-release-info
+        run: |
+          wget -O latest.json ${{env.RELEASE_API}}
+          echo "tag_name=$(jq -r .tag_name latest.json)" >> $GITHUB_OUTPUT
+          echo "name=$(jq -r .name latest.json)"         >> $GITHUB_OUTPUT
+          echo "body<<EOF"                               >> $GITHUB_OUTPUT
+          jq -r .body latest.json                        >> $GITHUB_OUTPUT
+          echo "EOF"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release --bin sql2bin --manifest-path ./rust/Cargo.toml
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql2bin
+          path: rust/target/release/sql2bin
+          if-no-files-found: error
+
+  sql2bin:
+    needs: [get-release-infos, build]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download sql2bin
+        uses: actions/download-artifact@v4
+        with:
+          name: sql2bin
+          merge-multiple: true
+
+      - name: Download SQL and Extract
+        run: |
+          wget -O release.json ${{env.RELEASE_API}}
+          parsed=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("parsed.sqlite.7z"))')  
+          wget -q -O parsed.sqlite.7z $parsed
+
+      - name: Extract
+        run: |
+          7z x parsed.sqlite.7z
+          rm parsed.sqlite.7z
+
+      - name: Run
+        run: |
+          mkdir output
+          ./sql2bin --db-path parsed.sqlite -o output
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
+          name: ${{ needs.get-release-infos.outputs.name }}
+          body: ${{ needs.get-release-infos.outputs.body }}
+          files: output/*
