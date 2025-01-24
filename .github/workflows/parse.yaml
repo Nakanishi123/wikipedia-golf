@@ -17,15 +17,17 @@ jobs:
       - name: Get Latest Tag Name
         id: get-release-info
         run: |
-          wget -O latest.json $RELEASE_API
+          wget -O latest.json ${{env.RELEASE_API}}
           echo "tag_name=$(jq -r .tag_name latest.json)" >> $GITHUB_OUTPUT
-            echo "name=$(jq -r .name latest.json)"       >> $GITHUB_OUTPUT
+          echo "name=$(jq -r .name latest.json)"         >> $GITHUB_OUTPUT
           echo "body<<EOF"                               >> $GITHUB_OUTPUT
           jq -r .body latest.json                        >> $GITHUB_OUTPUT
           echo "EOF"                                     >> $GITHUB_OUTPUT
 
-  concat-pages-redirect:
+  page-redirect-linktarget:
     needs: get-release-infos
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Check disk space 1
@@ -40,30 +42,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download SQL
+      - name: Download SQL and Extract
         run: |
           wget -O release.json ${{env.RELEASE_API}}
 
-          pages=$(cat release.json | jq -r '.assets[] | select(.browser_download_url | test("page\\.sqlite")) | .url')  
-          wget -O jawiki-latest-page.sqlite.7z $pages
+          page=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("jawiki-latest-page.sqlite.7z"))')  
+          wget -q -O jawiki-latest-page.sqlite.7z $page
           7z x jawiki-latest-page.sqlite.7z
           rm jawiki-latest-page.sqlite.7z
 
-          redirect=$(cat release.json | jq -r '.assets[] | select(.browser_download_url | test("redirect\\.sqlite")) | .url')
-          wget -O jawiki-latest-redirect.sqlite.7z $redirect
+          redirect=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("jawiki-latest-redirect.sqlite.7z"))')
+          wget -q -O jawiki-latest-redirect.sqlite.7z $redirect
           7z x jawiki-latest-redirect.sqlite.7z
           rm jawiki-latest-redirect.sqlite.7z
 
+          redirect=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("jawiki-latest-linktarget.sqlite.7z"))')
+          wget -q -O jawiki-latest-linktarget.sqlite.7z $redirect
+          7z x jawiki-latest-linktarget.sqlite.7z
+          rm jawiki-latest-linktarget.sqlite.7z
+
+          pagelinks=$(cat release.json | jq -r '.assets[].browser_download_url | select(test("jawiki-latest-pagelinks.sqlite.7z"))')
+          for url in $pagelinks; do wget -q $url; done
+          7z x jawiki-latest-pagelinks.sqlite.7z.001
+          find . -name "jawiki-latest-pagelinks.sqlite.7z*" -delete
+
       - name: Parse SQL
-        run: python3 python/src/page_redirect.py --page jawiki-latest-page.sqlite --redirect jawiki-latest-redirect.sqlite --output pages_redirect.sqlite
+        run: |
+          python3 python/src/parse.py \
+          --page jawiki-latest-page.sqlite \
+          --redirect jawiki-latest-redirect.sqlite \
+          --linktarget jawiki-latest-linktarget.sqlite \
+          --pagelinks jawiki-latest-pagelinks.sqlite \
+          --output parsed.sqlite
 
       - name: compress
-        run: zstd -11 pages_redirect.sqlite -o pages_redirect.sqlite.zst
+        run: 7z a parsed.sqlite.7z parsed.sqlite
 
-      - name: Release Pages Redirect
+      - name: Release Parsed SQL
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}
           body: ${{ needs.get-release-infos.outputs.body }}
-          files: pages_redirect.sqlite.zst
+          files: parsed.sqlite.7z
