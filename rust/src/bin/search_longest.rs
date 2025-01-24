@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into_par_iter()
         .filter(|&id| id % args.matrix_size == args.matrix_num)
         .map(search_longest_path)
-        .map(index2id)
+        .map(indices2id)
         .collect::<Vec<_>>();
 
     let longest_paths_json = longest_paths
@@ -86,8 +86,8 @@ fn search_longest_path<T: Into<u24> + From<u24>>(start_index: T) -> Vec<T> {
     longest_path
 }
 
-fn index2id<T: Into<usize>>(indeces: Vec<T>) -> Vec<u32> {
-    indeces
+fn indices2id<T: Into<usize>>(indices: Vec<T>) -> Vec<u32> {
+    indices
         .into_iter()
         .map(|index| PAGES.get().unwrap()[index.into()].page_id)
         .collect()
