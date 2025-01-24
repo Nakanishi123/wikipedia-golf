@@ -23,7 +23,7 @@ jobs:
           echo "name=$(jq -r .name latest.json)"         >> $GITHUB_OUTPUT
           echo "body<<EOF"                               >> $GITHUB_OUTPUT
           jq -r .body latest.json                        >> $GITHUB_OUTPUT
-          echo "EOF"
+          echo "EOF"                                     >> $GITHUB_OUTPUT
 
   build:
     runs-on: ubuntu-latest
