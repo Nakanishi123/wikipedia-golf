@@ -32,13 +32,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build
-        run: cargo build --release --bin sql2bin --manifest-path ./rust/Cargo.toml
+        run: cargo build --release --bin sql2bin --bin char_list --manifest-path ./rust/Cargo.toml
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: sql2bin
-          path: rust/target/release/sql2bin
+          name: executables
+          path: |
+            rust/target/release/sql2bin
+            rust/target/release/char_list
           if-no-files-found: error
 
   sql2bin:
@@ -50,7 +52,6 @@ jobs:
       - name: Download sql2bin
         uses: actions/download-artifact@v4
         with:
-          name: sql2bin
           merge-multiple: true
 
       - name: Download SQL and Extract
@@ -70,6 +71,13 @@ jobs:
           chmod +x ./sql2bin
           ./sql2bin --db-path parsed.sqlite -o output
 
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: output/*
+          if-no-files-found: error
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
@@ -77,3 +85,38 @@ jobs:
           name: ${{ needs.get-release-infos.outputs.name }}
           body: ${{ needs.get-release-infos.outputs.body }}
           files: output/*
+
+  make-char-list:
+    needs: [get-release-infos, build]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download char_list
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Run
+        run: |
+          chmod +x ./char_list
+          ./char_list --pages-bin pages.bin.zst --output-folder . --separate 120
+
+      - name: Compress
+        run: |
+          tar -cJf char_list.tar.xz *.json
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: char_list
+          path: char_list.tar.xz
+          if-no-files-found: error
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
+          name: ${{ needs.get-release-infos.outputs.name }}
+          body: ${{ needs.get-release-infos.outputs.body }}
+          files: char_list.tar.xz
