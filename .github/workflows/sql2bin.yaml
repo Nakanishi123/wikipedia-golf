@@ -87,7 +87,7 @@ jobs:
           files: output/*
 
   make-char-list:
-    needs: [get-release-infos, build]
+    needs: [get-release-infos, build, sql2bin]
     permissions:
       contents: write
     runs-on: ubuntu-latest
