@@ -41,6 +41,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         pages.push(page?);
     }
 
+    // page_titleでソート
+    pages.sort_by(|a, b| a.page_title.cmp(&b.page_title));
+
     // ページ ID からインデックスへのマッピングを作成
     let mut page2index: HashMap<u24, usize> = HashMap::with_capacity(pages.len());
     for (i, page) in pages.iter().enumerate() {
