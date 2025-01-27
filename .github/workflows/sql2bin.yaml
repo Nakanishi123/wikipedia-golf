@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build
-        run: cargo build --release --bin sql2bin --bin char_list --manifest-path ./rust/Cargo.toml
+        run: cargo build --release --bin sql2bin --bin title_list --manifest-path ./rust/Cargo.toml
 
       - name: Upload
         uses: actions/upload-artifact@v4
@@ -40,7 +40,7 @@ jobs:
           name: executables
           path: |
             rust/target/release/sql2bin
-            rust/target/release/char_list
+            rust/target/release/title_list
           if-no-files-found: error
 
   sql2bin:
@@ -86,31 +86,31 @@ jobs:
           body: ${{ needs.get-release-infos.outputs.body }}
           files: output/*
 
-  make-char-list:
+  make-title-list:
     needs: [get-release-infos, build, sql2bin]
     permissions:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - name: Download char_list
+      - name: Download title_list
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
 
       - name: Run
         run: |
-          chmod +x ./char_list
-          ./char_list --pages-bin pages.bin.zst --output-folder . --separate 120
+          chmod +x ./title_list
+          ./title_list --pages-bin pages.bin.zst --output-folder . --file-num 2999
 
       - name: Compress
         run: |
-          tar -cJf char_list.tar.xz *.json
+          tar -cJf title_list.tar.xz *.json
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: char_list
-          path: char_list.tar.xz
+          name: title_list
+          path: title_list.tar.xz
           if-no-files-found: error
 
       - name: Release
@@ -119,4 +119,4 @@ jobs:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}
           body: ${{ needs.get-release-infos.outputs.body }}
-          files: char_list.tar.xz
+          files: title_list.tar.xz
