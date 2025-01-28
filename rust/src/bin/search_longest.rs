@@ -2,7 +2,7 @@ use clap::Parser;
 use num24::u24;
 use rayon::prelude::*;
 use serde_json::json;
-use std::collections::{hash_map::Entry, HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::{Arc, OnceLock};
 use wikipedia_golf::structs::Page;
@@ -24,12 +24,18 @@ struct Args {
 }
 
 static PAGES: OnceLock<Arc<Vec<Page>>> = OnceLock::new();
-static PAGE_EDGES: OnceLock<Arc<Vec<Vec<u24>>>> = OnceLock::new();
+static PAGE_EDGES: OnceLock<Arc<Vec<Vec<u32>>>> = OnceLock::new();
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let pages: Vec<Page> = load_bincode_zst(&args.pages_bin)?;
     let page_edges: Vec<Vec<u24>> = load_bincode_zst(&args.page_edges_bin)?;
+
+    // u32の方が速いので変換
+    let page_edges = page_edges
+        .into_iter()
+        .map(|v| v.into_iter().map(|x| x.into()).collect())
+        .collect();
 
     PAGES.set(Arc::new(pages)).unwrap();
     PAGE_EDGES.set(Arc::new(page_edges)).unwrap();
@@ -37,7 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let longest_paths = (0..PAGES.get().unwrap().len())
         .into_par_iter()
         .filter(|&id| id % args.matrix_size == args.matrix_num)
-        .map(search_longest_path)
+        .map(|id: usize| search_longest_path(id as u32))
         .map(indices2id)
         .collect::<Vec<_>>();
 
@@ -56,20 +62,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn search_longest_path<T: Into<u24> + From<u24>>(start_index: T) -> Vec<T> {
-    let mut queue: VecDeque<u24> = VecDeque::new();
-    let mut parent: HashMap<u24, u24> = HashMap::new();
+fn search_longest_path(start_index: u32) -> Vec<usize> {
+    let mut queue: VecDeque<u32> = VecDeque::new();
+    let mut parent: Vec<u32> = vec![u32::MAX; PAGES.get().unwrap().len()];
 
-    let start_index_u24: u24 = start_index.into();
-    queue.push_back(start_index_u24);
-    parent.insert(start_index_u24, u24::MAX);
+    let root = u32::MAX - 1;
+    let not_visited = u32::MAX;
+    queue.push_back(start_index);
+    parent[start_index as usize] = root;
 
-    let mut farthest_node = start_index_u24;
+    let mut farthest_node = start_index;
     while let Some(current) = queue.pop_front() {
         farthest_node = current;
-        for &next in PAGE_EDGES.get().unwrap()[current.to_usize()].iter() {
-            if let Entry::Vacant(e) = parent.entry(next) {
-                e.insert(current);
+        for &next in PAGE_EDGES.get().unwrap()[current as usize].iter() {
+            if parent[next as usize] == not_visited {
+                parent[next as usize] = current;
                 queue.push_back(next);
             }
         }
@@ -77,9 +84,9 @@ fn search_longest_path<T: Into<u24> + From<u24>>(start_index: T) -> Vec<T> {
 
     let mut longest_path = Vec::new();
     let mut node = farthest_node;
-    while node != u24::MAX {
-        longest_path.push(node.into());
-        node = parent[&node];
+    while node != root {
+        longest_path.push(node as usize);
+        node = parent[node as usize];
     }
 
     longest_path.reverse();
