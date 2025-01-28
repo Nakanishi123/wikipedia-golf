@@ -93,8 +93,10 @@ jobs:
           path: shortest_paths${{matrix.num.matrix_num}}.json
 
   concat-and-release:
-    runs-on: ubuntu-latest
     needs: [get-release-infos, search-longest]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -107,6 +109,12 @@ jobs:
 
       - name: Compress
         run: 7z a shortest_path.json.7z shortest_path.json
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shortest_path
+          path: shortest_path.json.7z
 
       - name: Release
         uses: softprops/action-gh-release@v2
