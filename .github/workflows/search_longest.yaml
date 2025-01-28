@@ -103,10 +103,10 @@ jobs:
           merge-multiple: true
 
       - name: Concatenate
-        run: jq -sc 'add' *.json > shortest_paths.json
+        run: jq -sc 'add' *.json > shortest_path.json
 
       - name: Compress
-        run: 7z a shortest_paths.json.7z shortest_paths.json
+        run: 7z a shortest_path.json.7z shortest_path.json
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -114,4 +114,4 @@ jobs:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}
           body: ${{ needs.get-release-infos.outputs.body }}
-          files: shortest_paths.json.7z
+          files: shortest_path.json.7z
