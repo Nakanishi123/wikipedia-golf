@@ -1,4 +1,4 @@
-name: Search Longest Paths
+name: Search Longest Path
 
 on:
   workflow_dispatch:
@@ -84,13 +84,13 @@ jobs:
           --page-edges-bin page_edges.bin.zst \
           --matrix-num ${{matrix.num.matrix_num}} \
           --matrix-size ${{matrix.num.matrix_size}} \
-          -o shortest_paths${{matrix.num.matrix_num}}.json
+          -o longest_paths${{matrix.num.matrix_num}}.json
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: shortest_paths-json-${{matrix.num.matrix_num}}
-          path: shortest_paths${{matrix.num.matrix_num}}.json
+          name: longest_paths-json-${{matrix.num.matrix_num}}
+          path: longest_paths${{matrix.num.matrix_num}}.json
 
   concat-and-release:
     needs: [get-release-infos, search-longest]
@@ -101,20 +101,20 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: shortest_paths-json-*
+          pattern: longest_paths-json-*
           merge-multiple: true
 
       - name: Concatenate
-        run: jq -sc 'add' *.json > shortest_path.json
+        run: jq -sc 'add' *.json > longest_path.json
 
       - name: Compress
-        run: 7z a shortest_path.json.7z shortest_path.json
+        run: 7z a longest_path.json.7z longest_path.json
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: shortest_path
-          path: shortest_path.json.7z
+          name: longest_path
+          path: longest_path.json.7z
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -122,4 +122,4 @@ jobs:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}
           body: ${{ needs.get-release-infos.outputs.body }}
-          files: shortest_path.json.7z
+          files: longest_path.json.7z
