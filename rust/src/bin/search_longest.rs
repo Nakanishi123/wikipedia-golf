@@ -44,15 +44,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into_par_iter()
         .filter(|&id| id % args.matrix_size == args.matrix_num)
         .map(|id: usize| search_longest_path(id as u32))
-        .map(indices2id)
+        .map(|result| (indices2id(result.0), result.1))
         .collect::<Vec<_>>();
 
     let longest_paths_json = longest_paths
         .into_iter()
         .map(|indeces| {
             json!({
-                "id": indeces[0],
-                "path": indeces,
+                "id": indeces.0[0],
+                "path": indeces.0,
+                "distance_count": indeces.1,
             })
         })
         .collect::<Vec<_>>();
@@ -62,7 +63,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn search_longest_path(start_index: u32) -> Vec<usize> {
+fn search_longest_path(start_index: u32) -> (Vec<usize>, Vec<u32>) {
     let mut queue: VecDeque<u32> = VecDeque::new();
     let mut parent: Vec<u32> = vec![u32::MAX; PAGES.get().unwrap().len()];
 
@@ -71,11 +72,27 @@ fn search_longest_path(start_index: u32) -> Vec<usize> {
     queue.push_back(start_index);
     parent[start_index as usize] = root;
 
+    let mut distance_count: Vec<u32> = vec![1; 1];
+    let mut distance_now = 0;
+    let mut distance_change = start_index;
+    let mut distance_change_now = false;
+
     let mut farthest_node = start_index;
     while let Some(current) = queue.pop_front() {
+        if current == distance_change {
+            distance_now += 1;
+            distance_change_now = true;
+        }
         farthest_node = current;
         for &next in PAGE_EDGES.get().unwrap()[current as usize].iter() {
             if parent[next as usize] == not_visited {
+                if distance_change_now {
+                    distance_count.push(1);
+                    distance_change = next;
+                    distance_change_now = false;
+                } else {
+                    distance_count[distance_now] += 1;
+                }
                 parent[next as usize] = current;
                 queue.push_back(next);
             }
@@ -90,7 +107,7 @@ fn search_longest_path(start_index: u32) -> Vec<usize> {
     }
 
     longest_path.reverse();
-    longest_path
+    (longest_path, distance_count)
 }
 
 fn indices2id<T: Into<usize>>(indices: Vec<T>) -> Vec<u32> {
