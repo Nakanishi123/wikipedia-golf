@@ -49,11 +49,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let longest_paths_json = longest_paths
         .into_iter()
-        .map(|indeces| {
+        .map(|indices| {
             json!({
-                "id": indeces.0[0],
-                "path": indeces.0,
-                "distance_count": indeces.1,
+                "id": indices.0[0],
+                "path": indices.0,
+                "distance_count": indices.1,
             })
         })
         .collect::<Vec<_>>();
