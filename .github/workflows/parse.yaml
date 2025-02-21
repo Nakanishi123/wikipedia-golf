@@ -2,6 +2,10 @@ name: Parse SQL
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Download jawiki"]
+    types:
+      - completed
 
 env:
   RELEASE_API: https://api.github.com/repos/nakanishi123/wikipedia-golf/releases/latest
@@ -85,3 +89,7 @@ jobs:
           name: ${{ needs.get-release-infos.outputs.name }}
           body: ${{ needs.get-release-infos.outputs.body }}
           files: parsed.sqlite.7z
+
+  call-sql2bin:
+    needs: page-redirect-linktarget
+    uses: ./.github/workflows/sql2bin.yaml

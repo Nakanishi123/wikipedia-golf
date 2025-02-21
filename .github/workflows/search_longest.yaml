@@ -2,7 +2,10 @@ name: Search Longest Path
 
 on:
   workflow_dispatch:
-  workflow_call:
+  workflow_run:
+    workflows: ["Parse SQL"]
+    types:
+      - completed
 
 env:
   RELEASE_API: https://api.github.com/repos/nakanishi123/wikipedia-golf/releases/latest
