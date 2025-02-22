@@ -92,4 +92,6 @@ jobs:
 
   call-sql2bin:
     needs: page-redirect-linktarget
+    permissions:
+      contents: write
     uses: ./.github/workflows/sql2bin.yaml
