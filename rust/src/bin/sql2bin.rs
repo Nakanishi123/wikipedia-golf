@@ -29,10 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             page_id: (row.get::<_, u32>(0)?),
             page_title: row.get(1)?,
             page_is_redirect: (row.get::<_, u32>(2)?),
-            page_redirect_id: match row.get::<_, u32>(3) {
-                Ok(id) => Some(id),
-                Err(_) => None,
-            },
+            page_redirect_id: row.get::<_, u32>(3).ok(),
         })
     })?;
 
