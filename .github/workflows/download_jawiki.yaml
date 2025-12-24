@@ -204,6 +204,16 @@ jobs:
       matrix:
         files: ${{fromJson(needs.make-matrix.outputs.matrix-json-only-1)}}
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+
+      - name: Check Disk Space (Debug)
+        run: df -h
+
       - name: Download splited sqlite
         uses: actions/download-artifact@v4
         with:
