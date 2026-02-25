@@ -2,9 +2,7 @@ use clap::Parser;
 use num24::u24;
 use rayon::prelude::*;
 use serde_json::json;
-use std::collections::VecDeque;
 use std::error::Error;
-use std::sync::{Arc, OnceLock};
 use wikipedia_golf::structs::Page;
 use wikipedia_golf::util::load_bincode_zst;
 
@@ -23,8 +21,43 @@ struct Args {
     output_file: String,
 }
 
-static PAGES: OnceLock<Arc<Vec<Page>>> = OnceLock::new();
-static PAGE_EDGES: OnceLock<Arc<Vec<Vec<u32>>>> = OnceLock::new();
+#[derive(Debug)]
+struct CsrGraph {
+    offsets: Vec<usize>,
+    edges: Vec<u32>,
+}
+
+impl CsrGraph {
+    fn neighbors(&self, node: u32) -> &[u32] {
+        let start = self.offsets[node as usize];
+        let end = self.offsets[node as usize + 1];
+        &self.edges[start..end]
+    }
+}
+
+struct BfsWorkspace {
+    queue: Vec<u32>,          // BFSのキュー
+    parent: Vec<u32>,         // 経路復元用の親ノード
+    visited_gen: Vec<u32>,    // 訪問済み判定(世代の番号が入る)
+    gen: u32,                 // そのBFSが何回目か(世代)
+    distance_count: Vec<u32>, // 各距離におけるノード数
+}
+
+impl BfsWorkspace {
+    fn new(n: usize) -> Self {
+        Self {
+            queue: Vec::with_capacity(n.min(1_000_000)),
+            parent: vec![0; n],
+            visited_gen: vec![0; n],
+            gen: 1,
+            distance_count: Vec::with_capacity(128),
+        }
+    }
+
+    fn next_gen(&mut self) {
+        self.gen += 1;
+    }
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
@@ -32,19 +65,33 @@ fn main() -> Result<(), Box<dyn Error>> {
     let page_edges: Vec<Vec<u24>> = load_bincode_zst(&args.page_edges_bin)?;
 
     // u32の方が速いので変換
-    let page_edges = page_edges
+    let page_edges: Vec<Vec<u32>> = page_edges
         .into_iter()
         .map(|v| v.into_iter().map(|x| x.into()).collect())
         .collect();
 
-    PAGES.set(Arc::new(pages)).unwrap();
-    PAGE_EDGES.set(Arc::new(page_edges)).unwrap();
+    // CSR 形式に変換
+    let total = page_edges.iter().map(|v| v.len()).sum();
+    let mut offsets = Vec::with_capacity(page_edges.len() + 1);
+    let mut edges = Vec::with_capacity(total);
 
-    let longest_paths = (0..PAGES.get().unwrap().len())
+    offsets.push(0);
+    for v in page_edges {
+        edges.extend(v);
+        offsets.push(edges.len());
+    }
+    let edges_csr = CsrGraph { offsets, edges };
+
+    // index -> page id
+    let page_ids: Vec<u32> = pages.iter().map(|page| page.page_id).collect();
+
+    let longest_paths = (0..pages.len())
         .into_par_iter()
         .filter(|&id| id % args.matrix_size == args.matrix_num)
-        .map(|id: usize| search_longest_path(id as u32))
-        .map(|result| (indices2id(result.0), result.1))
+        .map_init(
+            || BfsWorkspace::new(pages.len()),
+            |ws, id| search_longest_path(&edges_csr, &page_ids, id as u32, ws),
+        )
         .collect::<Vec<_>>();
 
     let longest_paths_json = longest_paths
@@ -63,56 +110,59 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn search_longest_path(start_index: u32) -> (Vec<usize>, Vec<u32>) {
-    let mut queue: VecDeque<u32> = VecDeque::new();
-    let mut parent: Vec<u32> = vec![u32::MAX; PAGES.get().unwrap().len()];
+fn search_longest_path(
+    g: &CsrGraph,
+    page_ids: &[u32],
+    start: u32,
+    ws: &mut BfsWorkspace,
+) -> (Vec<usize>, Vec<u32>) {
+    const ROOT: u32 = u32::MAX - 1;
 
-    let root = u32::MAX - 1;
-    let not_visited = u32::MAX;
-    queue.push_back(start_index);
-    parent[start_index as usize] = root;
+    // BFSの初期化
+    ws.next_gen(); // 世代を進める
+    ws.queue.clear();
+    ws.distance_count.clear();
 
-    let mut distance_count: Vec<u32> = vec![1; 1];
-    let mut distance_now = 0;
-    let mut distance_change = start_index;
-    let mut distance_change_now = false;
+    // 開始ノードをキューに追加し、親ノードをROOTに設定
+    ws.queue.push(start);
+    ws.parent[start as usize] = ROOT;
+    ws.visited_gen[start as usize] = ws.gen;
 
-    let mut farthest_node = start_index;
-    while let Some(current) = queue.pop_front() {
-        if current == distance_change {
-            distance_now += 1;
-            distance_change_now = true;
-        }
-        farthest_node = current;
-        for &next in PAGE_EDGES.get().unwrap()[current as usize].iter() {
-            if parent[next as usize] == not_visited {
-                if distance_change_now {
-                    distance_count.push(1);
-                    distance_change = next;
-                    distance_change_now = false;
-                } else {
-                    distance_count[distance_now] += 1;
+    let gen = ws.gen;
+    let mut head = 0;
+    let mut level_start = 0; // 現在の距離レベルの開始位置
+    let mut farthest = start;
+
+    // BFSループ
+    while level_start < ws.queue.len() {
+        let level_end = ws.queue.len();
+        ws.distance_count.push((level_end - level_start) as u32);
+
+        while head < level_end {
+            let current = ws.queue[head];
+            head += 1;
+            farthest = current;
+
+            for &next in g.neighbors(current) {
+                if ws.visited_gen[next as usize] == gen {
+                    continue; // すでに訪問済み
                 }
-                parent[next as usize] = current;
-                queue.push_back(next);
+                ws.queue.push(next);
+                ws.parent[next as usize] = current;
+                ws.visited_gen[next as usize] = gen;
             }
         }
+        level_start = level_end; // 次のレベルの開始位置に更新
     }
 
-    let mut longest_path = Vec::new();
-    let mut node = farthest_node;
-    while node != root {
-        longest_path.push(node as usize);
-        node = parent[node as usize];
+    // 経路復元（index -> page_id 変換込み）
+    let mut path = Vec::new();
+    let mut node = farthest;
+    while node != ROOT {
+        path.push(page_ids[node as usize] as usize);
+        node = ws.parent[node as usize];
     }
+    path.reverse();
 
-    longest_path.reverse();
-    (longest_path, distance_count)
-}
-
-fn indices2id<T: Into<usize>>(indices: Vec<T>) -> Vec<u32> {
-    indices
-        .into_iter()
-        .map(|index| PAGES.get().unwrap()[index.into()].page_id)
-        .collect()
+    (path, ws.distance_count.clone())
 }
