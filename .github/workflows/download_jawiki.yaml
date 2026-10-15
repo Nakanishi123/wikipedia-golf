@@ -174,7 +174,9 @@ jobs:
       - name: Split SQL file
         if: ${{env.UPDATED}}
         run: |
-          awk '!/^INSERT INTO/ || (row++ % ${{matrix.files.total-matrix}} + 1) == ${{matrix.files.matrix-num}} { print > "do.sql" }' temp.sql
+          # NOTE: 2025-09以降のダンプは INSERT 文が複数行形式(ヘッダ行の次行から1行1レコード)になったため,
+          # INSERT 文単位でチャンクに分配する。行単位で分配すると INSERT ヘッダを欠いたチャンクで構文エラーになる。
+          awk '/^INSERT INTO/ { row++; keep = ((row % ${{matrix.files.total-matrix}} + 1) == ${{matrix.files.matrix-num}}); stmt = 1 } !stmt || keep { print > "do.sql" } /;[ \t]*$/ { stmt = 0 }' temp.sql
           rm temp.sql
 
       - name: Import SQL Dump into MySQL
