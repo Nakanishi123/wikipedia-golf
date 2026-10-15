@@ -62,10 +62,10 @@ jobs:
       matrix:
         files: ${{fromJson(needs.make-matrix.outputs.matrix-json-only-1)}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Get cache previous pubDate
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-prevPubDate.txt
@@ -96,13 +96,13 @@ jobs:
 
       - name: Upload temp.sql.gz (${{matrix.files.file}}-temp.sql.gz)
         if: ${{env.UPDATED}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{matrix.files.file}}-temp.sql.gz
           path: temp.sql.gz
 
       - name: Upload release_body.rtxt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release_body.rtxt.${{matrix.files.file}}
           path: release_body.rtxt.${{matrix.files.file}}
@@ -111,7 +111,7 @@ jobs:
         run: echo ${{env.PUB_DATE}} > prevPubDate.txt
 
       - name: Save cache temp pubDate
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-temp-prevPubDate.txt
@@ -123,10 +123,10 @@ jobs:
       matrix:
         files: ${{fromJson(needs.make-matrix.outputs.matrix-json)}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download temp.sql.gz
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: ${{matrix.files.file}}-temp.sql.gz
           merge-multiple: true
@@ -145,7 +145,7 @@ jobs:
           7z x temp.sql.gz
           rm temp.sql.gz
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: ${{env.UPDATED}}
         with:
           python-version: "3.12"
@@ -194,7 +194,7 @@ jobs:
 
       - name: Upload splited sqlite
         if: ${{env.UPDATED}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{matrix.files.sqlite}}.splited.sqlite${{matrix.files.matrix-num}}
           path: ${{matrix.files.matrix-num}}.sqlite
@@ -207,17 +207,19 @@ jobs:
         files: ${{fromJson(needs.make-matrix.outputs.matrix-json-only-1)}}
     steps:
       - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           android: true
           dotnet: true
           haskell: true
+          # v2.0.0 でデフォルトが false になったため, v1 までの動作(スワップ削除でディスクを広く取る)を維持する
+          swap-storage: true
 
       - name: Check Disk Space (Debug)
         run: df -h
 
       - name: Download splited sqlite
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: ${{matrix.files.sqlite}}.splited.sqlite*
           path: splited
@@ -276,20 +278,20 @@ jobs:
           done
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: compressed-sqlite-${{matrix.files.sqlite}}
           path: artifacts/*
           if-no-files-found: error
 
       - name: Get cache temp pubDate
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-temp-prevPubDate.txt
 
       - name: Save cache pubDate
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: prevPubDate.txt
           key: ${{matrix.files.file}}-prevPubDate.txt
@@ -301,20 +303,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Get Date
         run: echo "DATE=$(TZ=JST-9 date '+%Y.%-m.%-d')" >> $GITHUB_ENV
 
       - name: Download Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./artifacts/
           pattern: compressed-sqlite-*
           merge-multiple: true
 
       - name: Download Release Body
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release_bodies
           pattern: release_body.rtxt.*
@@ -331,7 +333,7 @@ jobs:
           echo "EOF"                          >> $GITHUB_ENV
 
       - name: Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.DATE }}
           name: ${{ env.DATE }}

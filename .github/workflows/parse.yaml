@@ -44,7 +44,7 @@ jobs:
       - name: Check disk space 2
         run: df -h
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download SQL and Extract
         run: |
@@ -83,7 +83,7 @@ jobs:
         run: 7z a parsed.sqlite.7z parsed.sqlite
 
       - name: Release Parsed SQL
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}

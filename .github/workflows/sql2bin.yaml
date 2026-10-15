@@ -29,13 +29,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build
         run: cargo build --release --bin sql2bin --bin title_list --manifest-path ./rust/Cargo.toml
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: executables
           path: |
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download sql2bin
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
 
@@ -72,14 +72,14 @@ jobs:
           ./sql2bin --db-path parsed.sqlite -o output
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binaries
           path: output/*
           if-no-files-found: error
 
       - name: Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}
@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download title_list
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
 
@@ -107,14 +107,14 @@ jobs:
           tar -cJf title_list.tar.xz *.json
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: title_list
           path: title_list.tar.xz
           if-no-files-found: error
 
       - name: Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.get-release-infos.outputs.tag_name }}
           name: ${{ needs.get-release-infos.outputs.name }}
