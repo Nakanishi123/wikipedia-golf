@@ -70,7 +70,7 @@ jobs:
       - name: Make matrix
         id: make-matrix
         run: |
-          echo "matrix=$(jq -nc '[range(70) | {matrix_num: ., matrix_size: 70}]')" >> $GITHUB_OUTPUT
+          echo "matrix=$(jq -nc '[range(35) | {matrix_num: ., matrix_size: 35}]')" >> $GITHUB_OUTPUT
 
   search-longest:
     runs-on: ubuntu-latest
