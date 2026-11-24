@@ -161,7 +161,7 @@ jobs:
         if: ${{env.UPDATED}}
         uses: shogo82148/actions-setup-mysql@v1
         with:
-          mysql-version: "9.0"
+          mysql-version: "8.4"
           root-password: root
           my-cnf: |
             skip_innodb_doublewrite
@@ -272,7 +272,7 @@ jobs:
       - name: Download Release when not updated
         if: ${{!env.UPDATED}}
         run: |
-          files=$(wget -qO- ${{env.RELEASE_API}} | jq -r '.assets[] | select(.name | startswith("${{matrix.files.sqlite}}")) | .browser_download_url')
+          files=$(wget -qO- --header="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" ${{env.RELEASE_API}} | jq -r '.assets[] | select(.name | startswith("${{matrix.files.sqlite}}")) | .browser_download_url')
           for file in $files; do
             wget -P artifacts $file
           done

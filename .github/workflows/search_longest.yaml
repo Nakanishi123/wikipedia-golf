@@ -12,6 +12,7 @@ env:
 
 jobs:
   get-release-infos:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       tag_name: ${{ steps.get-release-info.outputs.tag_name }}
@@ -21,7 +22,7 @@ jobs:
       - name: Get Latest Tag Name
         id: get-release-info
         run: |
-          wget -O latest.json ${{env.RELEASE_API}}
+          wget --header="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -O latest.json ${{env.RELEASE_API}}
           echo "tag_name=$(jq -r .tag_name latest.json)" >> $GITHUB_OUTPUT
           echo "name=$(jq -r .name latest.json)"         >> $GITHUB_OUTPUT
           echo "body<<EOF"                               >> $GITHUB_OUTPUT
@@ -29,6 +30,7 @@ jobs:
           echo "EOF"                                     >> $GITHUB_OUTPUT
 
   build:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,6 +47,7 @@ jobs:
           if-no-files-found: error
 
   download-bin:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: robinraju/release-downloader@v1.13
@@ -59,6 +62,7 @@ jobs:
           path: "*.bin.zst"
 
   search-longest-matrix:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.make-matrix.outputs.matrix }}
