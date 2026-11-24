@@ -16,7 +16,7 @@ struct Args {
     output_folder: PathBuf,
 }
 
-fn encode_varint_csr(adj: &[Vec<u32>]) -> VarintCsr {
+fn encode_varint_csr(adj: &[Vec<u32>]) -> Result<VarintCsr, Box<dyn Error>> {
     let n = adj.len();
     let mut offsets = Vec::with_capacity(n + 1);
     let mut data = Vec::new();
@@ -38,13 +38,18 @@ fn encode_varint_csr(adj: &[Vec<u32>]) -> VarintCsr {
             }
             data.push(d as u8);
         }
-        offsets.push(data.len() as u32);
+        let offset = u32::try_from(data.len())
+            .map_err(|_| format!("VarintCsr byte length ({}) exceeds u32::MAX", data.len()))?;
+        offsets.push(offset);
     }
     data.shrink_to_fit();
-    VarintCsr { offsets, data }
+    Ok(VarintCsr { offsets, data })
 }
 
-fn build_vcs_graph(pages: &[Page], page_edges: &[Vec<u24>]) -> (Vec<Page>, VarintBiCsr) {
+fn build_vcs_graph(
+    pages: &[Page],
+    page_edges: &[Vec<u24>],
+) -> Result<(Vec<Page>, VarintBiCsr), Box<dyn Error>> {
     let n = pages.len();
 
     // Compute in-degrees to seed BFS from highest in-degree hubs
@@ -107,12 +112,12 @@ fn build_vcs_graph(pages: &[Page], page_edges: &[Vec<u24>]) -> (Vec<Page>, Varin
         }
     }
 
-    let fwd = encode_varint_csr(&fwd_adj);
+    let fwd = encode_varint_csr(&fwd_adj)?;
     drop(fwd_adj);
-    let rev = encode_varint_csr(&rev_adj);
+    let rev = encode_varint_csr(&rev_adj)?;
     drop(rev_adj);
 
-    (vcs_pages, VarintBiCsr { fwd, rev })
+    Ok((vcs_pages, VarintBiCsr { fwd, rev }))
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -165,7 +170,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     save_bincode_zst(args.output_folder.join("page_edges.bin.zst"), &page_edges)?;
 
     // BFS順・双方向 Delta+Varint CSR 形式を保存（省メモリサーバー向け）
-    let (vcs_pages, vcs_graph) = build_vcs_graph(&pages, &page_edges);
+    let (vcs_pages, vcs_graph) = build_vcs_graph(&pages, &page_edges)?;
     save_bincode_zst(args.output_folder.join("vcs_pages.bin.zst"), &vcs_pages)?;
     save_bincode_zst(args.output_folder.join("vcs_page_edges.bin.zst"), &vcs_graph)?;
 
@@ -221,7 +226,7 @@ mod tests {
             .map(|v| v.iter().map(|&x| x.into()).collect())
             .collect();
 
-        let (vcs_pages, vcs_graph) = build_vcs_graph(&pages, &page_edges);
+        let (vcs_pages, vcs_graph) = build_vcs_graph(&pages, &page_edges).unwrap();
         assert_eq!(vcs_pages.len(), pages.len());
 
         let mut fwd_pairs: Vec<(u32, u32)> = Vec::new();
