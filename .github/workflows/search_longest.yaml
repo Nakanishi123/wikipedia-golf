@@ -59,7 +59,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: download-bin
-          path: "*.bin.zst"
+          path: |
+            pages.bin.zst
+            page_edges.bin.zst
 
   search-longest-matrix:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
